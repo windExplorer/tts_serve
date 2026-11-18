@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TTS_SERVE WebUI</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; background: #f4f6f9; margin: 0; padding: 0; color: #1f2937; }
+  .app { max-width: 1180px; margin: 0 auto; padding: 0 16px 24px; }
+  .topbar { position: sticky; top: 0; z-index: 20; background: #f4f6f9; padding: 20px 0 12px; }
+  header h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: #6b7280; font-size: 13px; margin-bottom: 16px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid #e5e7eb; margin-bottom: 0; }
+  .tab { padding: 10px 20px; cursor: pointer; font-size: 14px; color: #6b7280; border-bottom: 2px solid transparent; }
+  .tab.active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 600; }
+  .panel { display: none; padding-top: 20px; }
+  .panel.active { display: block; }
+  .synth-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .right-col { position: sticky; top: 140px; max-height: calc(100vh - 155px); overflow-y: auto; padding-right: 4px; }
+  .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 20px; }
+  .card h2 { font-size: 16px; margin: 0 0 16px; }
+  .card-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .card-title-row h2 { margin: 0; }
+  label { display: block; font-weight: 600; font-size: 13px; margin: 12px 0 6px; }
+  input[type=text], input[type=number], textarea, select { width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 9px 11px; font-size: 14px; font-family: inherit; background: #fff; }
+  textarea { resize: vertical; min-height: 72px; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: #2563eb; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .row > * { flex: 1; }
+  button { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: 9px 18px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+  button:hover { background: #1d4ed8; }
+  button:disabled { background: #93c5fd; cursor: not-allowed; }
+  button.ghost { background: #f3f4f6; color: #374151; }
+  button.ghost:hover { background: #e5e7eb; }
+  button.danger { background: #dc2626; }
+  button.danger:hover { background: #b91c1c; }
+  button.small { padding: 5px 10px; font-size: 12px; }
+  .status { font-size: 13px; color: #4b5563; min-height: 20px; }
+  .status.err { color: #dc2626; }
+  .status.ok { color: #059669; }
+  .counter { float: right; font-weight: 500; font-size: 12px; color: #2563eb; background: #eff6ff; padding: 2px 8px; border-radius: 10px; }
+  details { margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 12px; }
+  summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+  .params { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+  .params label { margin: 0; font-weight: 500; }
+  .params input { margin-top: 4px; }
+  canvas { width: 100%; height: 84px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; display: block; }
+  audio { width: 100%; margin: 10px 0 4px; }
+  .wave-label { font-size: 12px; color: #6b7280; margin: 10px 0 6px; font-weight: 600; }
+  .info { font-size: 12px; color: #4b5563; line-height: 1.8; margin-top: 10px; word-break: break-all; }
+  .info b { color: #1f2937; font-weight: 600; }
+  .stats { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #4b5563; }
+  .stats span { background: #f3f4f6; padding: 4px 8px; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+  th { color: #6b7280; font-weight: 600; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+  .badge.on { background: #d1fae5; color: #065f46; }
+  .badge.off { background: #fee2e2; color: #991b1b; }
+  .dropzone { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 24px; text-align: center; color: #6b7280; cursor: pointer; font-size: 14px; }
+  .dropzone.drag { border-color: #2563eb; background: #eff6ff; color: #2563eb; }
+  .history-item { padding: 8px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+  .history-item .t { color: #6b7280; font-size: 12px; }
+  .hidden { display: none !important; }
+  .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 30; }
+  .modal { background: #fff; border-radius: 10px; padding: 24px; width: 420px; max-width: 90vw; }
+</style>
+</head>
+<body>
+<div class="app">
+<div class="topbar">
+  <header>
+    <h1>TTS_SERVE WebUI</h1>
+    <div class="sub">语音合成、音色管理与在线调试 — 全部走服务真实接口</div>
+  </header>
+  <div class="tabs">
+    <div class="tab active" data-panel="synth">语音合成</div>
+    <div class="tab" data-panel="voices">音色管理</div>
+  </div>
+</div>
+
+<!-- ============ 合成 ============ -->
+<section class="panel active" id="panel-synth">
+  <div class="synth-layout">
+    <div class="left-col">
+      <div class="card">
+        <h2>合成设置</h2>
+        <label>推理后端（下拉切换，网关自动启停模型）</label>
+        <div class="row">
+          <select id="backendSelect">
+            <option value="qwen3">Qwen3-TTS-0.6B</option>
+            <option value="cosyvoice3">Fun-CosyVoice3-0.5B</option>
+          </select>
+          <button class="ghost small" id="switchBackendBtn" style="flex:0 0 auto">切换</button>
+        </div>
+        <div class="status" id="backendStatus" style="font-size:12px;margin-top:6px">检测中…</div>
+        <label>音色</label>
+        <div class="row">
+          <select id="voiceSelect"></select>
+        </div>
+        <label style="display:flex;gap:8px;align-items:center;font-weight:500">
+          <input type="checkbox" id="fastClone" checked style="width:auto"> 极速克隆（只用音色，不需要参考文本，默认开启）
+        </label>
+        <label>参考文本（逐字原文；普通克隆模式需要，极速模式可留空）</label>
+        <textarea id="refText"></textarea>
+        <label>要合成的文本 <span class="counter" id="textCounter">0 字 / 0 字符</span></label>
+        <select id="textPreset" style="margin-bottom:8px">
+          <option value="">— 选择预设文本（自定义请直接编辑下方）—</option>
+        </select>
+        <textarea id="ttsText" style="min-height:100px">你好，这是一次测试。今天天气不错，我们出去走走吧。</textarea>
+
+        <details>
+          <summary>生成参数（高级）</summary>
+          <div class="params">
+            <div><label>temperature</label><input type="number" step="0.1" id="p_temperature" placeholder="默认"></div>
+            <div><label>top_k</label><input type="number" id="p_top_k" placeholder="默认"></div>
+            <div><label>top_p</label><input type="number" step="0.05" id="p_top_p" placeholder="默认"></div>
+            <div><label>max_new_tokens</label><input type="number" id="p_max_new_tokens" placeholder="默认"></div>
+            <div><label>repetition_penalty</label><input type="number" step="0.1" id="p_repetition_penalty" placeholder="默认"></div>
+            <div><label>subtalker_top_k</label><input type="number" id="p_subtalker_top_k" placeholder="默认"></div>
+          </div>
+        </details>
+
+        <div class="row" style="margin-top:16px">
+          <button id="genBtn">生成语音</button>
+        </div>
+        <div class="status" id="genStatus"></div>
+      </div>
+
+      <div class="card">
+        <h2>ASR 语音转文字（识别后填入合成文本）</h2>
+        <div class="dropzone" id="asrDrop">拖拽音频到这里，或点击选择，自动识别文字</div>
+        <input type="file" id="asrFile" class="hidden" accept="audio/*">
+        <div class="status" id="asrStatus"></div>
+      </div>
+    </div>
+
+    <div class="right-col">
+      <div class="card">
+        <div class="card-title-row">
+          <h2>参考音频</h2>
+          <button class="ghost small" id="previewBtn">试听</button>
+        </div>
+        <div class="wave-label">波形</div>
+        <canvas id="refWave" width="600" height="84"></canvas>
+        <audio id="refPlayer" controls></audio>
+        <div class="info" id="refInfo">选择音色后自动加载参考音频信息</div>
+        <div class="status" id="refStatus"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <h2>生成结果</h2>
+          <button class="ghost small" id="clearResult">清空</button>
+        </div>
+        <div class="wave-label">波形</div>
+        <canvas id="waveCanvas" width="600" height="84"></canvas>
+        <audio id="genPlayer" controls></audio>
+        <div class="row" style="margin-top:6px">
+          <a id="download" class="ghost small" style="text-align:center;text-decoration:none;padding:9px 18px;border:1px solid #d1d5db;border-radius:6px;color:#374151" download="tts_result.wav">下载 WAV</a>
+        </div>
+        <div class="stats" id="debugStats" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <h2>生成历史（本地保存最近 20 条）</h2>
+        <div id="historyList"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 音色管理 ============ -->
+<section class="panel" id="panel-voices">
+  <div class="card">
+    <h2>服务状态</h2>
+    <div class="stats" id="serverStats"></div>
+  </div>
+
+  <div class="card">
+    <h2>API 默认配置（影响插件调用，不影响本页在线调试）</h2>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:500">
+      <input type="checkbox" id="apiFastClone" style="width:auto"> 默认使用极速克隆
+    </label>
+    <div style="font-size:12px;color:#6b7280;margin:6px 0 12px">
+      插件等 API 调用 /inference_zero_shot 时，若未显式传 <code>fast_clone</code> 字段，将使用此默认值。
+      显式传 fast_clone=true/false 的请求不受此设置影响。勾选=极速克隆（不需要参考文本），取消=普通克隆（需要参考文本）。
+    </div>
+    <div class="row" style="max-width:240px">
+      <button class="small" id="saveApiConfig">保存设置</button>
+    </div>
+    <div class="status" id="apiConfigStatus" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <h2>新增音色</h2>
+    <div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div>
+        <label>音色名称</label>
+        <input type="text" id="newName" placeholder="例如：我的音色">
+        <label>参考文本（可先用 ASR 自动生成）</label>
+        <textarea id="newRefText" placeholder="参考音频里逐字对应的原文"></textarea>
+        <label style="display:flex;gap:8px;align-items:center;font-weight:500">
+          <input type="checkbox" id="newEnabled" checked style="width:auto"> 启用
+        </label>
+        <div class="row" style="margin-top:12px">
+          <button class="ghost small" id="newAsrBtn">ASR 识别参考音频并填入</button>
+          <input type="file" id="newAsrFile" class="hidden" accept="audio/*">
+        </div>
+        <div class="status" id="newAsrStatus"></div>
+      </div>
+      <div>
+        <label>方式一：拖拽上传音频文件</label>
+        <div class="dropzone" id="voiceDrop">拖拽音频到这里，或点击选择文件</div>
+        <input type="file" id="voiceFile" class="hidden" accept="audio/*">
+        <label style="margin-top:14px">方式二：音频链接自动下载并重命名保存</label>
+        <div class="row">
+          <input type="text" id="newUrl" placeholder="https://example.com/voice.mp3">
+          <button class="small" id="urlAddBtn">下载新增</button>
+        </div>
+        <div class="status" id="addStatus"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>音色列表</h2>
+    <table>
+      <thead><tr><th>名称</th><th>参考文件</th><th>参考文本</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody id="voiceTable"></tbody>
+    </table>
+  </div>
+</section>
+</div>
+
+<div class="modal-mask hidden" id="editModal">
+  <div class="modal">
+    <h2 style="margin-top:0">编辑音色</h2>
+    <label>音色名称</label>
+    <input type="text" id="editName">
+    <label>参考文本</label>
+    <textarea id="editRefText"></textarea>
+    <div class="row" style="margin-top:16px">
+      <button id="editSave">保存</button>
+      <button class="ghost" id="editCancel">取消</button>
+    </div>
+    <div class="status" id="editStatus"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { voices: {}, status: {}, history: [], sampleRate: 24000, currentVoice: "", refUrl: null };
+let audioCtx = null;
+let refSamples = null;
+
+function currentBackend() { return state.status.backend || "unknown"; }
+function backendLabel(name) { return name === "qwen3" ? "Qwen3-TTS-0.6B" : name === "cosyvoice3" ? "Fun-CosyVoice3-0.5B" : name; }
+
+async function checkBackend() {
+  const el = $("backendStatus");
+  try {
+    const r = await fetch("/api/gateway_status", { signal: AbortSignal.timeout(6000) });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const data = await r.json();
+    state.status.backend = data.backend;
+    state.status.sample_rate = data.sample_rate;
+    state.status.gpu_name = data.gpu_name;
+    $("backendSelect").value = data.backend;
+    if (data.switching) {
+      el.textContent = "正在切换模型，请稍候…";
+      el.className = "status";
+    } else {
+      el.textContent = "当前：" + backendLabel(data.backend) + " · sample_rate=" + data.sample_rate + " · GPU=" + (data.gpu_name || "无");
+      el.className = "status ok";
+    }
+  } catch (e) {
+    el.textContent = "网关不可用（" + e.message + "）— 请先启动 start_gateway.bat";
+    el.className = "status err";
+  }
+}
+
+$("switchBackendBtn").addEventListener("click", async () => {
+  const target = $("backendSelect").value;
+  if (target === currentBackend()) { setStatus("backendStatus", "已经是当前后端", "ok"); return; }
+  const btn = $("switchBackendBtn");
+  btn.disabled = true;
+  $("genBtn").disabled = true;
+  const el = $("backendStatus");
+  el.textContent = "正在切换到 " + backendLabel(target) + "，首次加载模型需 10~60 秒，请稍候…";
+  el.className = "status";
+  try {
+    const r = await fetch("/api/switch_backend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ backend: target }),
+    });
+    if (!r.ok) {
+      let msg = r.statusText;
+      try { msg = (await r.json()).detail || msg; } catch (e) {}
+      throw new Error(msg);
+    }
+    await checkBackend();
+    await loadAll();
+    setStatus("backendStatus", "已切换到 " + backendLabel(target), "ok");
+  } catch (e) {
+    setStatus("backendStatus", "切换失败：" + e.message, "err");
+    $("backendSelect").value = currentBackend();
+    await checkBackend();
+  } finally {
+    btn.disabled = false;
+    $("genBtn").disabled = false;
+  }
+});
+
+const TEXT_PRESETS = [
+  { name: "短句 · 日常测试", text: "你好，这是一次测试。今天天气不错，我们出去走走吧。" },
+  { name: "短句 · 开心", text: "太好了！我们周末一起去爬山吧，听说山顶的日出特别漂亮！" },
+  { name: "中句 · 温柔安慰", text: "没关系的，累了就停下来歇一歇。不用总逼着自己往前跑，我就在这里，安安静静陪着你。" },
+  { name: "中句 · 傲气对白", text: "我的人生，该怎么走，轮不到旁人指手画脚。想要赢，就凭本事说话；输了，也别找任何借口。" },
+  { name: "中句 · 撒娇日常", text: "今天的晚霞超好看的！我买了你最喜欢的焦糖奶茶，我们一起去江边走走好不好？就当是放松一下啦。" },
+  { name: "长句 · 新闻播报", text: "各位观众晚上好，欢迎收看今天的新闻。今天白天，全国大部分地区天气晴朗，气温适宜，适合户外活动。明天午后，部分地区将会有阵雨，出门记得携带雨具。" },
+  { name: "长句 · 小说旁白", text: "夜幕降临时，我常在这片花园驻足。每一朵绽放的花都承载着逝者的故事，像是星辰般闪烁。作为记忆的守护者，我愿静静聆听每一个离别的呢喃，将它们化作永恒的光芒。" },
+  { name: "长句 · 情感独白", text: "有些人，见一面就是一辈子；有些话，藏在心里，却再也说不出口。如今我站在这里，看着满城的灯火，才终于明白，原来最珍贵的从来都不是那些轰轰烈烈的瞬间，而是有人愿意陪你度过每一个平凡的朝夕。" },
+  { name: "日语 · 日常", text: "おはよう、熱いコーヒーはいかが？目が覚めるわよ。" },
+  { name: "多标点 · 停顿测试", text: "你……你怎么来了？我，我以为你不会再……算了，没什么。进来吧，外面冷。" },
+];
+
+function updateTextCounter() {
+  const text = $("ttsText").value;
+  const chars = text.replace(/\s/g, "").length;
+  const words = (text.match(/[\u4e00-\u9fff\u3040-\u30ff]/g) || []).length;
+  $("textCounter").textContent = words + " 字 / " + chars + " 字符";
+}
+
+function initTextPresets() {
+  const select = $("textPreset");
+  TEXT_PRESETS.forEach((item, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = item.name;
+    select.appendChild(option);
+  });
+  select.addEventListener("change", () => {
+    if (select.value === "") return;
+    $("ttsText").value = TEXT_PRESETS[Number(select.value)].text;
+    updateTextCounter();
+  });
+  $("ttsText").addEventListener("input", updateTextCounter);
+  updateTextCounter();
+}
+initTextPresets();
+
+async function api(path, options = {}) {
+  const response = await fetch(path, options);
+  if (!response.ok) {
+    let message = response.statusText;
+    try { message = (await response.json()).detail || message; } catch (e) {}
+    throw new Error(message);
+  }
+  return response;
+}
+
+function setStatus(id, text, type = "") {
+  const el = $(id);
+  el.textContent = text;
+  el.className = "status " + type;
+}
+
+function setActivePanel(name) {
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.panel === name));
+  document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
+}
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => setActivePanel(t.dataset.panel)));
+
+async function loadApiConfig() {
+  try {
+    const cfg = await (await api("/api/config")).json();
+    $("apiFastClone").checked = !!cfg.fast_clone_default;
+  } catch (e) {
+    setStatus("apiConfigStatus", "读取配置失败: " + e.message, "err");
+  }
+}
+
+$("saveApiConfig").addEventListener("click", async () => {
+  try {
+    const r = await fetch("/api/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fast_clone_default: $("apiFastClone").checked }),
+    });
+    if (!r.ok) {
+      let msg = r.statusText;
+      try { msg = (await r.json()).detail || msg; } catch (e) {}
+      throw new Error(msg);
+    }
+    setStatus("apiConfigStatus", "已保存，API 默认模式立即生效", "ok");
+  } catch (e) {
+    setStatus("apiConfigStatus", "保存失败: " + e.message, "err");
+  }
+});
+
+async function loadAll() {
+  try {
+    state.status = await (await api("/api/status")).json();
+    state.voices = await (await api("/api/voices")).json();
+    state.sampleRate = state.status.sample_rate || 24000;
+    renderStats();
+    renderVoiceSelect();
+    renderVoiceTable();
+  } catch (e) {
+    setStatus("genStatus", "加载失败: " + e.message, "err");
+  }
+}
+
+function renderStats() {
+  $("serverStats").innerHTML = [
+    "后端: " + state.status.backend,
+    "采样率: " + state.status.sample_rate,
+    "GPU: " + (state.status.gpu_name || "不可用"),
+    "音色: " + state.status.voices_enabled + "/" + state.status.voices_total + " 启用",
+    "ASR: " + (state.status.asr_loaded ? "已加载" : "懒加载"),
+  ].map((x) => "<span>" + x + "</span>").join("");
+}
+
+function renderVoiceSelect() {
+  const select = $("voiceSelect");
+  const previous = select.value || state.currentVoice;
+  select.innerHTML = "";
+  Object.entries(state.voices).forEach(([name, info]) => {
+    if (info.enabled === false) return;
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    select.appendChild(option);
+  });
+  if (previous && state.voices[previous]) select.value = previous;
+  state.currentVoice = select.value;
+  updateRefText();
+  loadReferenceInfo();
+}
+
+function updateRefText() {
+  const info = state.voices[$("voiceSelect").value];
+  $("refText").value = info ? (info.prompt_text || "") : "";
+}
+$("voiceSelect").addEventListener("change", () => { updateRefText(); loadReferenceInfo(); });
+
+function getAudioContext() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function drawWaveform(samples, canvasId, color) {
+  const canvas = $(canvasId);
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width, height = canvas.height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#f9fafb";
+  ctx.fillRect(0, 0, width, height);
+  if (!samples || !samples.length) return;
+  ctx.fillStyle = color || "#2563eb";
+  const bars = 180;
+  const step = Math.max(1, Math.floor(samples.length / bars));
+  for (let i = 0; i < bars; i++) {
+    let peak = 0;
+    for (let j = 0; j < step; j++) {
+      const value = Math.abs(samples[i * step + j] || 0);
+      if (value > peak) peak = value;
+    }
+    const barHeight = Math.max(1, peak * height * 0.92);
+    ctx.fillRect(i * (width / bars), (height - barHeight) / 2, Math.max(1, width / bars - 1), barHeight);
+  }
+}
+
+async function loadReferenceInfo() {
+  const name = $("voiceSelect").value;
+  const info = state.voices[name];
+  if (!name || !info) return;
+  setStatus("refStatus", "加载参考音频…");
+  try {
+    const response = await api("/api/voices/" + encodeURIComponent(name) + "/audio");
+    const raw = await response.arrayBuffer();
+    if (state.refUrl) URL.revokeObjectURL(state.refUrl);
+    state.refUrl = URL.createObjectURL(new Blob([raw], { type: response.headers.get("content-type") || "audio/wav" }));
+    $("refPlayer").src = state.refUrl;
+    const decoded = await getAudioContext().decodeAudioData(raw.slice(0));
+    refSamples = decoded.getChannelData(0);
+    drawWaveform(refSamples, "refWave", "#0ea5e9");
+    $("refInfo").innerHTML = [
+      "<b>音色</b>：" + escapeHtml(name),
+      "<b>文件</b>：" + escapeHtml(info.prompt_wav || "-"),
+      "<b>采样率</b>：" + decoded.sampleRate + " Hz",
+      "<b>时长</b>：" + decoded.duration.toFixed(2) + " s",
+      "<b>声道</b>：" + decoded.numberOfChannels,
+      "<b>参考文本</b>：" + escapeHtml(info.prompt_text || "（无）"),
+    ].join("<br>");
+    setStatus("refStatus", "已加载", "ok");
+  } catch (e) {
+    refSamples = null;
+    drawWaveform(null, "refWave");
+    $("refInfo").textContent = "参考音频加载失败：" + e.message;
+    setStatus("refStatus", "加载失败", "err");
+  }
+}
+
+$("previewBtn").addEventListener("click", () => {
+  const player = $("refPlayer");
+  if (!player.src) { loadReferenceInfo(); return; }
+  player.currentTime = 0;
+  player.play().catch((e) => setStatus("refStatus", "播放失败: " + e.message, "err"));
+});
+
+function renderVoiceTable() {
+  const tbody = $("voiceTable");
+  tbody.innerHTML = "";
+  Object.entries(state.voices).forEach(([name, info]) => {
+    const tr = document.createElement("tr");
+    const enabled = info.enabled !== false;
+    tr.innerHTML =
+      "<td>" + escapeHtml(name) + "</td>" +
+      "<td>" + escapeHtml(info.prompt_wav || "") + "</td>" +
+      "<td>" + escapeHtml((info.prompt_text || "").slice(0, 40)) + "</td>" +
+      "<td><span class='badge " + (enabled ? "on" : "off") + "'>" + (enabled ? "启用" : "禁用") + "</span></td>" +
+      "<td>" +
+        "<button class='ghost small' data-act='toggle' data-name='" + escapeAttr(name) + "'>" + (enabled ? "禁用" : "启用") + "</button> " +
+        "<button class='ghost small' data-act='edit' data-name='" + escapeAttr(name) + "'>编辑</button> " +
+        "<button class='danger small' data-act='delete' data-name='" + escapeAttr(name) + "'>删除</button>" +
+      "</td>";
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("button").forEach((btn) => btn.addEventListener("click", () => voiceAction(btn.dataset.act, btn.dataset.name)));
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function escapeAttr(s) { return escapeHtml(s); }
+
+async function voiceAction(action, name) {
+  if (action === "toggle") {
+    const current = state.voices[name].enabled !== false;
+    try {
+      await api("/api/voices/" + encodeURIComponent(name), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !current }),
+      });
+      await loadAll();
+    } catch (e) { alert("操作失败: " + e.message); }
+  } else if (action === "delete") {
+    if (!confirm("确定删除音色「" + name + "」及其参考音频文件？")) return;
+    try {
+      await api("/api/voices/" + encodeURIComponent(name), { method: "DELETE" });
+      await loadAll();
+    } catch (e) { alert("删除失败: " + e.message); }
+  } else if (action === "edit") {
+    $("editName").value = name;
+    $("editName").dataset.original = name;
+    $("editRefText").value = state.voices[name].prompt_text || "";
+    $("editStatus").textContent = "";
+    $("editModal").classList.remove("hidden");
+  }
+}
+
+$("editSave").addEventListener("click", async () => {
+  const original = $("editName").dataset.original || $("editName").value;
+  try {
+    await api("/api/voices/" + encodeURIComponent(original), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: $("editName").value.trim(), prompt_text: $("editRefText").value }),
+    });
+    $("editModal").classList.add("hidden");
+    await loadAll();
+  } catch (e) { setStatus("editStatus", e.message, "err"); }
+});
+$("editCancel").addEventListener("click", () => $("editModal").classList.add("hidden"));
+
+function setupDropzone(dropId, fileId, handler) {
+  const zone = $(dropId);
+  const input = $(fileId);
+  zone.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => { if (input.files[0]) handler(input.files[0]); });
+  zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("drag"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("drag"));
+  zone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    zone.classList.remove("drag");
+    if (e.dataTransfer.files[0]) handler(e.dataTransfer.files[0]);
+  });
+}
+
+function buildVoiceForm() {
+  const fd = new FormData();
+  fd.append("name", $("newName").value.trim());
+  fd.append("prompt_text", $("newRefText").value);
+  fd.append("enabled", $("newEnabled").checked ? "true" : "false");
+  return fd;
+}
+
+setupDropzone("voiceDrop", "voiceFile", async (file) => {
+  if (!$("newName").value.trim()) { setStatus("addStatus", "请先填写音色名称", "err"); return; }
+  const fd = buildVoiceForm();
+  fd.append("file", file);
+  setStatus("addStatus", "上传中…");
+  try {
+    await api("/api/voices/upload", { method: "POST", body: fd });
+    setStatus("addStatus", "新增成功: " + $("newName").value.trim(), "ok");
+    $("newName").value = ""; $("newRefText").value = "";
+    await loadAll();
+  } catch (e) { setStatus("addStatus", "失败: " + e.message, "err"); }
+});
+
+$("urlAddBtn").addEventListener("click", async () => {
+  if (!$("newName").value.trim()) { setStatus("addStatus", "请先填写音色名称", "err"); return; }
+  if (!$("newUrl").value.trim()) { setStatus("addStatus", "请填写音频链接", "err"); return; }
+  const fd = buildVoiceForm();
+  fd.append("url", $("newUrl").value.trim());
+  setStatus("addStatus", "下载中…");
+  try {
+    const result = await (await api("/api/voices/url", { method: "POST", body: fd })).json();
+    setStatus("addStatus", "下载并新增成功: " + result.prompt_wav + " (" + result.bytes + " 字节)", "ok");
+    $("newName").value = ""; $("newRefText").value = ""; $("newUrl").value = "";
+    await loadAll();
+  } catch (e) { setStatus("addStatus", "失败: " + e.message, "err"); }
+});
+
+async function runAsr(file, statusId, targetId) {
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("file", file);
+  setStatus(statusId, "识别中（首次会下载模型，可能需要一两分钟）…");
+  try {
+    const result = await (await api("/api/asr", { method: "POST", body: fd })).json();
+    $(targetId).value = result.text;
+    setStatus(statusId, "识别完成", "ok");
+  } catch (e) { setStatus(statusId, "识别失败: " + e.message, "err"); }
+}
+setupDropzone("asrDrop", "asrFile", (file) => runAsr(file, "asrStatus", "ttsText"));
+$("newAsrBtn").addEventListener("click", () => $("newAsrFile").click());
+$("newAsrFile").addEventListener("change", (e) => { if (e.target.files[0]) runAsr(e.target.files[0], "newAsrStatus", "newRefText"); });
+
+function collectGenParams() {
+  const params = {};
+  for (const key of ["temperature", "top_k", "top_p", "max_new_tokens", "repetition_penalty", "subtalker_top_k"]) {
+    const value = $("p_" + key).value.trim();
+    if (value !== "") params[key] = value;
+  }
+  return params;
+}
+
+function pcmToWav(pcm, sr) {
+  const ch = 1, bits = 16, byteRate = sr * ch * bits / 8, blockAlign = ch * bits / 8;
+  const size = pcm.byteLength;
+  const buf = new ArrayBuffer(44 + size), view = new DataView(buf);
+  const str = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); view.setUint32(4, 36 + size, true); str(8, "WAVE");
+  str(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, ch, true); view.setUint32(24, sr, true);
+  view.setUint32(28, byteRate, true); view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bits, true);
+  str(36, "data"); view.setUint32(40, size, true);
+  new Uint8Array(buf, 44).set(new Uint8Array(pcm));
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+function int16ToFloat32(pcm) {
+  const input = new Int16Array(pcm);
+  const output = new Float32Array(input.length);
+  for (let i = 0; i < input.length; i++) output[i] = input[i] / 32768;
+  return output;
+}
+
+function loadHistory() {
+  try { state.history = JSON.parse(localStorage.getItem("tts_history") || "[]"); } catch (e) { state.history = []; }
+  renderHistory();
+}
+function renderHistory() {
+  const list = $("historyList");
+  list.innerHTML = "";
+  if (!state.history.length) { list.innerHTML = "<div class='status'>暂无记录</div>"; return; }
+  state.history.forEach((item) => {
+    const div = document.createElement("div");
+    div.className = "history-item";
+    div.innerHTML = "<div>" + escapeHtml(item.text.slice(0, 50)) + "</div>" +
+      "<div class='t'>" + escapeHtml(item.backend || "?") + " · " + escapeHtml(item.voice) + " · " + item.time + " · " + item.elapsed + "s · " + item.duration + "s</div>";
+    div.title = "点击重新填入参数";
+    div.style.cursor = "pointer";
+    div.addEventListener("click", () => {
+      $("ttsText").value = item.text;
+      $("voiceSelect").value = item.voice;
+      updateRefText();
+      loadReferenceInfo();
+    });
+    list.appendChild(div);
+  });
+}
+function addHistory(item) {
+  state.history.unshift(item);
+  state.history = state.history.slice(0, 20);
+  localStorage.setItem("tts_history", JSON.stringify(state.history));
+  renderHistory();
+}
+
+$("genBtn").addEventListener("click", async () => {
+  const btn = $("genBtn");
+  btn.disabled = true;
+  setStatus("genStatus", "生成中…");
+  const fd = new FormData();
+  fd.append("tts_text", $("ttsText").value);
+  fd.append("prompt_wav_path", $("voiceSelect").value);
+  fd.append("prompt_text", $("refText").value);
+  fd.append("fast_clone", $("fastClone").checked ? "true" : "false");
+  Object.entries(collectGenParams()).forEach(([k, v]) => fd.append(k, v));
+  try {
+    const started = performance.now();
+    const response = await api("/inference_zero_shot", { method: "POST", body: fd });
+    const serverTime = parseFloat(response.headers.get("X-Generation-Time") || "0");
+    const sr = parseInt(response.headers.get("X-Sample-Rate") || String(state.sampleRate), 10);
+    const pcm = await response.arrayBuffer();
+    const duration = pcm.byteLength / 2 / sr;
+    drawWaveform(int16ToFloat32(pcm), "waveCanvas", "#2563eb");
+    const url = URL.createObjectURL(pcmToWav(pcm, sr));
+    const player = $("genPlayer");
+    if (player.src) URL.revokeObjectURL(player.src);
+    player.src = url;
+    $("download").href = url;
+    const backendLabel = state.status.backend === "qwen3" ? "Qwen3" : state.status.backend === "cosyvoice3" ? "CosyVoice3" : currentBackend();
+    $("debugStats").innerHTML = [
+      "后端: " + backendLabel,
+      "采样率: " + sr + " Hz",
+      "时长: " + duration.toFixed(2) + " s",
+      "服务端耗时: " + serverTime.toFixed(2) + " s",
+      "端到端: " + ((performance.now() - started) / 1000).toFixed(2) + " s",
+      "PCM: " + pcm.byteLength + " 字节",
+    ].map((x) => "<span>" + x + "</span>").join("");
+    setStatus("genStatus", "生成完成（" + backendLabel + "）", "ok");
+    addHistory({ text: $("ttsText").value, voice: $("voiceSelect").value, backend: backendLabel, time: new Date().toLocaleString(), elapsed: serverTime.toFixed(2), duration: duration.toFixed(2) });
+  } catch (e) { setStatus("genStatus", "失败: " + e.message, "err"); }
+  finally { btn.disabled = false; }
+});
+
+$("clearResult").addEventListener("click", () => {
+  $("genPlayer").removeAttribute("src");
+  $("download").removeAttribute("href");
+  drawWaveform(null, "waveCanvas");
+  $("debugStats").innerHTML = "";
+});
+
+loadAll();
+loadHistory();
+loadApiConfig();
+checkBackend();
+</script>
+</body>
+</html>

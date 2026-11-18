@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 虚拟环境（体积大，不入库）
+.venv/
+.venv-qwen3/
+
+# 模型权重（体积大，用 scripts/download_*.py 下载）
+models/
+
+# 运行时配置（含本机路径/端口，不入库）
+.env
+
+# 运行日志与测试产物
+logs/
+data/
+
+# 音色参考音频（体积较大且为本地数据，按需自行放置）
+voices/*.wav
+voices/*.mp3
+voices/*.flac
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# 保留音色映射配置本身
+!voices/voices.json
