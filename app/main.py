@@ -327,6 +327,12 @@ async def inference_zero_shot(
     selected = app.state.voices.get(prompt_wav_path)
     if isinstance(selected, dict) and selected.get("enabled") is False:
         raise HTTPException(status_code=400, detail="该音色已禁用")
+    # 音色自带语种时优先用音色语种，否则回退到全局 LANGUAGE 设置
+    language = (
+        selected.get("language")
+        if isinstance(selected, dict) and selected.get("language")
+        else app.state.settings.language
+    )
 
     gen_kwargs = parse_gen_params(
         {
@@ -385,7 +391,7 @@ async def inference_zero_shot(
                         tts_text,
                         ref_audio,
                         ref_text,
-                        app.state.settings.language,
+                        language,
                         fast_clone=is_fast,
                         **gen_kwargs,
                     ),
@@ -499,6 +505,7 @@ async def api_upload_voice(
     name: str = Form(...),
     prompt_text: str = Form(""),
     enabled: str = Form("true"),
+    language: str = Form("Chinese"),
     file: UploadFile = File(...),
 ) -> dict:
     suffix = Path(file.filename or "").suffix.lower()
@@ -518,7 +525,7 @@ async def api_upload_voice(
         target.unlink(missing_ok=True)
         raise
     try:
-        app.state.store.add(name, filename, prompt_text, enabled.lower() not in {"false", "0", "no"})
+        app.state.store.add(name, filename, prompt_text, enabled.lower() not in {"false", "0", "no"}, language)
     except ValueError as exc:
         target.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(exc))
@@ -532,6 +539,7 @@ async def api_add_voice_from_url(
     url: str = Form(...),
     prompt_text: str = Form(""),
     enabled: str = Form("true"),
+    language: str = Form("Chinese"),
 ) -> dict:
     from urllib.parse import urlparse
 
@@ -560,7 +568,7 @@ async def api_add_voice_from_url(
         target.unlink(missing_ok=True)
         raise
     try:
-        app.state.store.add(name, filename, prompt_text, enabled.lower() not in {"false", "0", "no"})
+        app.state.store.add(name, filename, prompt_text, enabled.lower() not in {"false", "0", "no"}, language)
     except ValueError as exc:
         target.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(exc))
@@ -570,7 +578,7 @@ async def api_add_voice_from_url(
 
 @app.put("/api/voices/{name}")
 async def api_update_voice(name: str, payload: dict) -> dict:
-    allowed = {"name", "prompt_text", "enabled", "prompt_wav"}
+    allowed = {"name", "prompt_text", "enabled", "prompt_wav", "language"}
     changes = {k: v for k, v in payload.items() if k in allowed}
     try:
         voices = app.state.store.update(name, changes)

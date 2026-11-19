@@ -241,6 +241,8 @@
       <input type="text" id="newName" placeholder="例如：我的音色">
       <label>参考文本（极速克隆可留空；可先用 ASR 从上方音频生成）</label>
       <textarea id="newRefText" placeholder="参考音频里逐字对应的原文"></textarea>
+      <label>音频语种</label>
+      <select id="newLang"></select>
       <div class="row" style="margin-top:10px;justify-content:flex-start">
         <button class="ghost small" id="newAsrBtn">ASR 识别上方音频并填入</button>
       </div>
@@ -267,9 +269,15 @@
   </div>
 
   <div class="card">
-    <h2>音色列表</h2>
+    <div class="card-title-row">
+      <h2>音色列表</h2>
+      <div class="row" style="flex:0 0 auto;gap:8px">
+        <label for="voiceLangFilter" style="margin:0;font-weight:500;color:#6b7280">语种筛选</label>
+        <select id="voiceLangFilter" style="width:140px"></select>
+      </div>
+    </div>
     <table>
-      <thead><tr><th>名称</th><th>参考文件</th><th>参考文本</th><th>状态</th><th>操作</th></tr></thead>
+      <thead><tr><th>名称</th><th>参考文件</th><th>参考文本</th><th>语种</th><th>状态</th><th>操作</th></tr></thead>
       <tbody id="voiceTable"></tbody>
     </table>
   </div>
@@ -283,6 +291,8 @@
     <input type="text" id="editName">
     <label>参考文本</label>
     <textarea id="editRefText"></textarea>
+    <label>音频语种</label>
+    <select id="editLang"></select>
     <div class="row" style="margin-top:16px">
       <button id="editSave">保存</button>
       <button class="ghost" id="editCancel">取消</button>
@@ -301,6 +311,20 @@ let stagedAudio = null;
 // 音色列表试听用的共享 audio 元素
 let listAudio = null;
 let listAudioUrl = null;
+
+// 音色语种选项（值与后端 language 字段一致）；新增/编辑/筛选共用
+const VOICE_LANGUAGES = [
+  ["Chinese", "中文"], ["English", "英文"], ["Japanese", "日文"],
+  ["Korean", "韩文"], ["Cantonese", "粤语"], ["French", "法文"],
+  ["German", "德文"], ["Spanish", "西班牙文"], ["Portuguese", "葡萄牙文"],
+  ["Russian", "俄文"],
+];
+function langOptions(selected) {
+  return VOICE_LANGUAGES.map(([v, label]) =>
+    '<option value="' + v + '"' + (v === selected ? " selected" : "") + '>' + label + "</option>"
+  ).join("");
+}
+function fillLangSelect(id, selected) { $(id).innerHTML = langOptions(selected || "Chinese"); }
 
 function currentBackend() { return state.status.backend || "unknown"; }
 function backendLabel(name) { return name === "qwen3" ? "Qwen3-TTS-0.6B" : name === "cosyvoice3" ? "Fun-CosyVoice3-0.5B" : name; }
@@ -455,11 +479,13 @@ async function loadAll() {
     state.sampleRate = state.status.sample_rate || 24000;
     renderStats();
     renderVoiceSelect();
+    renderLangFilter();
     renderVoiceTable();
   } catch (e) {
     setStatus("genStatus", "加载失败: " + e.message, "err");
   }
 }
+$("voiceLangFilter").addEventListener("change", renderVoiceTable);
 
 function renderStats() {
   $("serverStats").innerHTML = [
@@ -559,16 +585,40 @@ $("previewBtn").addEventListener("click", () => {
   player.play().catch((e) => setStatus("refStatus", "播放失败: " + e.message, "err"));
 });
 
+function renderLangFilter() {
+  const sel = $("voiceLangFilter");
+  const previous = sel.value || "ALL";
+  // 只列出实际用到的语种，固定“全部”置顶
+  const used = new Set(Object.values(state.voices).map((v) => v.language || "Chinese"));
+  let html = '<option value="ALL">全部语种</option>';
+  VOICE_LANGUAGES.forEach(([v, label]) => {
+    if (used.has(v)) html += '<option value="' + v + '">' + label + "</option>";
+  });
+  // 兜底：出现选项表之外的语种值也让它能筛
+  used.forEach((v) => {
+    if (!VOICE_LANGUAGES.some(([code]) => code === v)) {
+      html += '<option value="' + escapeAttr(v) + '">' + escapeHtml(v) + "</option>";
+    }
+  });
+  sel.innerHTML = html;
+  sel.value = html.includes('value="' + previous + '"') ? previous : "ALL";
+}
+
 function renderVoiceTable() {
   const tbody = $("voiceTable");
   tbody.innerHTML = "";
+  const filter = $("voiceLangFilter").value;
   Object.entries(state.voices).forEach(([name, info]) => {
+    const lang = info.language || "Chinese";
+    if (filter !== "ALL" && lang !== filter) return;
     const tr = document.createElement("tr");
     const enabled = info.enabled !== false;
+    const langLabel = (VOICE_LANGUAGES.find(([v]) => v === lang) || [lang, lang])[1];
     tr.innerHTML =
       "<td>" + escapeHtml(name) + "</td>" +
       "<td>" + escapeHtml(info.prompt_wav || "") + "</td>" +
       "<td>" + escapeHtml((info.prompt_text || "").slice(0, 40)) + "</td>" +
+      "<td>" + escapeHtml(langLabel) + "</td>" +
       "<td><span class='badge " + (enabled ? "on" : "off") + "'>" + (enabled ? "启用" : "禁用") + "</span></td>" +
       "<td>" +
         "<button class='ghost small' data-act='play' data-name='" + escapeAttr(name) + "'>试听</button> " +
@@ -616,6 +666,7 @@ async function voiceAction(action, name) {
     $("editName").value = name;
     $("editName").dataset.original = name;
     $("editRefText").value = state.voices[name].prompt_text || "";
+    fillLangSelect("editLang", state.voices[name].language || "Chinese");
     $("editStatus").textContent = "";
     $("editModal").classList.remove("hidden");
   }
@@ -627,7 +678,11 @@ $("editSave").addEventListener("click", async () => {
     await api("/api/voices/" + encodeURIComponent(original), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: $("editName").value.trim(), prompt_text: $("editRefText").value }),
+      body: JSON.stringify({
+        name: $("editName").value.trim(),
+        prompt_text: $("editRefText").value,
+        language: $("editLang").value,
+      }),
     });
     $("editModal").classList.add("hidden");
     await loadAll();
@@ -754,6 +809,7 @@ $("step2NextBtn").addEventListener("click", () => {
     "<b>名称</b>：" + escapeHtml(name),
     "<b>音频文件</b>：" + escapeHtml(stagedAudio.label || "-"),
     "<b>参考文本</b>：" + escapeHtml($("newRefText").value || "（空，极速克隆模式）"),
+    "<b>语种</b>：" + escapeHtml((VOICE_LANGUAGES.find(([v]) => v === $("newLang").value) || ["", $("newLang").value])[1]),
     "<b>状态</b>：" + ($("newEnabled").checked ? "启用" : "禁用"),
   ].join("<br>");
   setStatus("addStatus", "");
@@ -770,13 +826,14 @@ $("confirmAddBtn").addEventListener("click", async () => {
     fd.append("name", $("newName").value.trim());
     fd.append("prompt_text", $("newRefText").value);
     fd.append("enabled", $("newEnabled").checked ? "true" : "false");
+    fd.append("language", $("newLang").value);
     fd.append("file", stagedAudio.file, stagedAudio.file.name);
     const result = await (await api("/api/voices/upload", { method: "POST", body: fd })).json();
     setStatus("addStatus", "新增成功: " + result.name, "ok");
     // 重置向导，回到第 1 步；列表刷新后新音色置顶
     clearStagedAudio();
     $("newName").value = ""; $("newRefText").value = ""; $("newUrl").value = "";
-    $("newEnabled").checked = true;
+    $("newEnabled").checked = true; fillLangSelect("newLang", "Chinese");
     showWizardStep(1);
     await loadAll();
   } catch (e) { setStatus("addStatus", "失败: " + e.message, "err"); }
@@ -890,6 +947,8 @@ $("clearResult").addEventListener("click", () => {
   $("debugStats").innerHTML = "";
 });
 
+fillLangSelect("newLang", "Chinese");
+fillLangSelect("editLang", "Chinese");
 loadAll();
 loadHistory();
 loadApiConfig();

@@ -27,10 +27,14 @@ class VoicesStore:
             return result
         for key, value in data.items():
             if isinstance(value, str):
-                result[key] = {"prompt_wav": key, "prompt_text": value, "enabled": True}
+                result[key] = {
+                    "prompt_wav": key, "prompt_text": value,
+                    "enabled": True, "language": "Chinese",
+                }
             elif isinstance(value, dict):
                 item = dict(value)
                 item.setdefault("enabled", True)
+                item.setdefault("language", "Chinese")
                 result[key] = item
         return result
 
@@ -57,7 +61,10 @@ class VoicesStore:
             index += 1
         return candidate
 
-    def add(self, name: str, wav_filename: str, prompt_text: str = "", enabled: bool = True) -> None:
+    def add(
+        self, name: str, wav_filename: str, prompt_text: str = "",
+        enabled: bool = True, language: str = "Chinese",
+    ) -> None:
         voices = self.load()
         if name in voices:
             raise ValueError(f"音色已存在: {name}")
@@ -67,6 +74,7 @@ class VoicesStore:
                 "prompt_wav": wav_filename,
                 "prompt_text": prompt_text,
                 "enabled": enabled,
+                "language": language or "Chinese",
             },
             **voices,
         }
