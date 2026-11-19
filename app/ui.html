@@ -611,7 +611,7 @@ function renderVoiceSelect() {
     if (info.enabled === false) return;
     const option = document.createElement("option");
     option.value = name;
-    option.textContent = name;
+    option.textContent = voiceDisplayName(name);
     select.appendChild(option);
   });
   if (previous && state.voices[previous]) select.value = previous;
@@ -721,7 +721,7 @@ function renderVoiceTable() {
     const enabled = info.enabled !== false;
     const langLabel = (VOICE_LANGUAGES.find(([v]) => v === lang) || [lang, lang])[1];
     tr.innerHTML =
-      "<td>" + escapeHtml(name) + "</td>" +
+      "<td>" + escapeHtml(voiceDisplayName(name)) + "</td>" +
       "<td>" + escapeHtml(info.prompt_wav || "") + "</td>" +
       "<td>" + escapeHtml((info.prompt_text || "").slice(0, 40)) + "</td>" +
       "<td>" + escapeHtml(langLabel) + "</td>" +
@@ -739,6 +739,11 @@ function renderVoiceTable() {
 
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function escapeAttr(s) { return escapeHtml(s); }
+
+// 音色名仅为展示去掉音频后缀；实际 key / value 保持原样，避免影响编辑、删除、合成
+function voiceDisplayName(name) {
+  return String(name).replace(/\.(wav|mp3|flac|ogg|m4a|aac|opus)$/i, "");
+}
 
 async function voiceAction(action, name) {
   if (action === "play") {
