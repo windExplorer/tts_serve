@@ -60,6 +60,17 @@
   .badge.off { background: #fee2e2; color: #991b1b; }
   .dropzone { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 24px; text-align: center; color: #6b7280; cursor: pointer; font-size: 14px; }
   .dropzone.drag { border-color: #2563eb; background: #eff6ff; color: #2563eb; }
+  .steps { display: flex; gap: 8px; margin: 4px 0 20px; }
+  .steps .step { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 6px; background: #f3f4f6; color: #9ca3af; font-size: 13px; font-weight: 600; }
+  .steps .step .num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #e5e7eb; color: #6b7280; font-size: 12px; flex: 0 0 auto; }
+  .steps .step.active { background: #eff6ff; color: #2563eb; }
+  .steps .step.active .num { background: #2563eb; color: #fff; }
+  .steps .step.done { background: #ecfdf5; color: #059669; }
+  .steps .step.done .num { background: #059669; color: #fff; }
+  .wizard-pane { display: none; }
+  .wizard-pane.active { display: block; }
+  .wizard-actions { display: flex; gap: 10px; margin-top: 18px; justify-content: flex-end; }
+  .wizard-actions button { min-width: 96px; }
   .history-item { padding: 8px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
   .history-item .t { color: #6b7280; font-size: 12px; }
   .hidden { display: none !important; }
@@ -195,31 +206,62 @@
 
   <div class="card">
     <h2>新增音色</h2>
-    <div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-      <div>
-        <label>音色名称</label>
-        <input type="text" id="newName" placeholder="例如：我的音色">
-        <label>参考文本（可先用 ASR 自动生成）</label>
-        <textarea id="newRefText" placeholder="参考音频里逐字对应的原文"></textarea>
-        <label style="display:flex;gap:8px;align-items:center;font-weight:500">
-          <input type="checkbox" id="newEnabled" checked style="width:auto"> 启用
-        </label>
-        <div class="row" style="margin-top:12px">
-          <button class="ghost small" id="newAsrBtn">ASR 识别参考音频并填入</button>
-          <input type="file" id="newAsrFile" class="hidden" accept="audio/*">
-        </div>
-        <div class="status" id="newAsrStatus"></div>
+    <div class="steps" id="wizardSteps">
+      <div class="step active" data-step="1"><span class="num">1</span>选择音频</div>
+      <div class="step" data-step="2"><span class="num">2</span>填写信息</div>
+      <div class="step" data-step="3"><span class="num">3</span>确认新增</div>
+    </div>
+
+    <!-- 第一步：获取音频并试听 -->
+    <div class="wizard-pane active" id="wizardPane1">
+      <label>方式一：拖拽或选择音频文件</label>
+      <div class="dropzone" id="voiceDrop">拖拽音频到这里，或点击选择文件</div>
+      <input type="file" id="voiceFile" class="hidden" accept="audio/*">
+      <label style="margin-top:16px">方式二：音频链接，服务端下载</label>
+      <div class="row">
+        <input type="text" id="newUrl" placeholder="https://example.com/voice.mp3">
+        <button class="small" id="urlFetchBtn">下载试听</button>
       </div>
-      <div>
-        <label>方式一：拖拽上传音频文件</label>
-        <div class="dropzone" id="voiceDrop">拖拽音频到这里，或点击选择文件</div>
-        <input type="file" id="voiceFile" class="hidden" accept="audio/*">
-        <label style="margin-top:14px">方式二：音频链接自动下载并重命名保存</label>
-        <div class="row">
-          <input type="text" id="newUrl" placeholder="https://example.com/voice.mp3">
-          <button class="small" id="urlAddBtn">下载新增</button>
+      <div class="status" id="fetchStatus"></div>
+      <div id="previewBox" class="hidden" style="margin-top:16px;border-top:1px solid #e5e7eb;padding-top:14px">
+        <div class="wave-label">音频波形</div>
+        <canvas id="stageWave" width="600" height="84"></canvas>
+        <audio id="stagePlayer" controls></audio>
+        <div class="info" id="stageInfo"></div>
+        <div class="wizard-actions">
+          <button class="ghost" id="stageResetBtn">重新选择</button>
+          <button id="stageNextBtn">下一步：填写信息</button>
         </div>
-        <div class="status" id="addStatus"></div>
+      </div>
+    </div>
+
+    <!-- 第二步：查漏补缺 -->
+    <div class="wizard-pane" id="wizardPane2">
+      <label>音色名称 <span style="color:#dc2626">*</span></label>
+      <input type="text" id="newName" placeholder="例如：我的音色">
+      <label>参考文本（极速克隆可留空；可先用 ASR 从上方音频生成）</label>
+      <textarea id="newRefText" placeholder="参考音频里逐字对应的原文"></textarea>
+      <div class="row" style="margin-top:10px;justify-content:flex-start">
+        <button class="ghost small" id="newAsrBtn">ASR 识别上方音频并填入</button>
+      </div>
+      <div class="status" id="newAsrStatus"></div>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:500;margin-top:12px">
+        <input type="checkbox" id="newEnabled" checked style="width:auto"> 启用
+      </label>
+      <div class="wizard-actions">
+        <button class="ghost" id="step2BackBtn">上一步</button>
+        <button id="step2NextBtn">下一步：确认</button>
+      </div>
+      <div class="status" id="infoStatus" style="margin-top:8px"></div>
+    </div>
+
+    <!-- 第三步：确认 -->
+    <div class="wizard-pane" id="wizardPane3">
+      <div class="info" id="confirmSummary"></div>
+      <div class="status" id="addStatus" style="margin-top:10px"></div>
+      <div class="wizard-actions">
+        <button class="ghost" id="step3BackBtn">上一步</button>
+        <button id="confirmAddBtn">确认新增</button>
       </div>
     </div>
   </div>
@@ -254,6 +296,8 @@ const $ = (id) => document.getElementById(id);
 const state = { voices: {}, status: {}, history: [], sampleRate: 24000, currentVoice: "", refUrl: null };
 let audioCtx = null;
 let refSamples = null;
+// 新增音色向导第一步暂存的音频 { file, url }; url 为 createObjectURL 生成，切换时回收
+let stagedAudio = null;
 
 function currentBackend() { return state.status.backend || "unknown"; }
 function backendLabel(name) { return name === "qwen3" ? "Qwen3-TTS-0.6B" : name === "cosyvoice3" ? "Fun-CosyVoice3-0.5B" : name; }
@@ -590,41 +634,85 @@ function setupDropzone(dropId, fileId, handler) {
   });
 }
 
-function buildVoiceForm() {
-  const fd = new FormData();
-  fd.append("name", $("newName").value.trim());
-  fd.append("prompt_text", $("newRefText").value);
-  fd.append("enabled", $("newEnabled").checked ? "true" : "false");
-  return fd;
+// ── 新增音色三步向导 ──
+function showWizardStep(step) {
+  for (let i = 1; i <= 3; i++) {
+    $("wizardPane" + i).classList.toggle("active", i === step);
+    const el = $("wizardSteps").querySelector('.step[data-step="' + i + '"]');
+    el.classList.toggle("active", i === step);
+    el.classList.toggle("done", i < step);
+  }
 }
 
-setupDropzone("voiceDrop", "voiceFile", async (file) => {
-  if (!$("newName").value.trim()) { setStatus("addStatus", "请先填写音色名称", "err"); return; }
-  const fd = buildVoiceForm();
-  fd.append("file", file);
-  setStatus("addStatus", "上传中…");
+function clearStagedAudio() {
+  if (stagedAudio && stagedAudio.url) URL.revokeObjectURL(stagedAudio.url);
+  stagedAudio = null;
+  $("stagePlayer").removeAttribute("src");
+  $("stageInfo").textContent = "";
+  drawWaveform(null, "stageWave");
+  $("previewBox").classList.add("hidden");
+  setStatus("fetchStatus", "");
+}
+
+// 暂存一个音频文件（File 或来自 URL 的 Blob），画波形 + 提供试听，不落库
+async function stageAudio(blob, label) {
+  setStatus("fetchStatus", "读取音频中…");
   try {
-    await api("/api/voices/upload", { method: "POST", body: fd });
-    setStatus("addStatus", "新增成功: " + $("newName").value.trim(), "ok");
-    $("newName").value = ""; $("newRefText").value = "";
-    await loadAll();
-  } catch (e) { setStatus("addStatus", "失败: " + e.message, "err"); }
+    const raw = await blob.arrayBuffer();
+    if (stagedAudio && stagedAudio.url) URL.revokeObjectURL(stagedAudio.url);
+    const url = URL.createObjectURL(new Blob([raw], { type: blob.type || "audio/wav" }));
+    const file = new File([raw], label || "voice.wav", { type: blob.type || "audio/wav" });
+    stagedAudio = { file: file, url: url, label: label };
+    $("stagePlayer").src = url;
+    const decoded = await getAudioContext().decodeAudioData(raw.slice(0));
+    drawWaveform(decoded.getChannelData(0), "stageWave", "#0ea5e9");
+    $("stageInfo").innerHTML = [
+      "<b>文件</b>：" + escapeHtml(label || "-"),
+      "<b>采样率</b>：" + decoded.sampleRate + " Hz",
+      "<b>时长</b>：" + decoded.duration.toFixed(2) + " s",
+      "<b>声道</b>：" + decoded.numberOfChannels,
+    ].join("<br>");
+    $("previewBox").classList.remove("hidden");
+    setStatus("fetchStatus", "音频已就绪，可试听后进入下一步", "ok");
+  } catch (e) {
+    clearStagedAudio();
+    setStatus("fetchStatus", "音频读取失败: " + e.message, "err");
+  }
+}
+
+setupDropzone("voiceDrop", "voiceFile", (file) => stageAudio(file, file.name));
+
+$("urlFetchBtn").addEventListener("click", async () => {
+  const url = $("newUrl").value.trim();
+  if (!url) { setStatus("fetchStatus", "请填写音频链接", "err"); return; }
+  const btn = $("urlFetchBtn");
+  btn.disabled = true;
+  setStatus("fetchStatus", "服务端下载中…");
+  try {
+    const resp = await api("/api/audio/fetch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: url }),
+    });
+    const blob = await resp.blob();
+    const cd = resp.headers.get("content-disposition") || "";
+    const match = cd.match(/filename="([^"]+)"/);
+    let label = match ? match[1] : (url.split("/").pop().split("?")[0] || "voice.wav");
+    try { label = decodeURIComponent(label); } catch (e) {}
+    await stageAudio(blob, label);
+  } catch (e) { setStatus("fetchStatus", "下载失败: " + e.message, "err"); }
+  finally { btn.disabled = false; }
 });
 
-$("urlAddBtn").addEventListener("click", async () => {
-  if (!$("newName").value.trim()) { setStatus("addStatus", "请先填写音色名称", "err"); return; }
-  if (!$("newUrl").value.trim()) { setStatus("addStatus", "请填写音频链接", "err"); return; }
-  const fd = buildVoiceForm();
-  fd.append("url", $("newUrl").value.trim());
-  setStatus("addStatus", "下载中…");
-  try {
-    const result = await (await api("/api/voices/url", { method: "POST", body: fd })).json();
-    setStatus("addStatus", "下载并新增成功: " + result.prompt_wav + " (" + result.bytes + " 字节)", "ok");
-    $("newName").value = ""; $("newRefText").value = ""; $("newUrl").value = "";
-    await loadAll();
-  } catch (e) { setStatus("addStatus", "失败: " + e.message, "err"); }
+$("stageResetBtn").addEventListener("click", clearStagedAudio);
+$("stageNextBtn").addEventListener("click", () => {
+  if (!stagedAudio) { setStatus("fetchStatus", "请先选择或下载一段音频", "err"); return; }
+  showWizardStep(2);
 });
+$("step2BackBtn").addEventListener("click", () => showWizardStep(1));
+$("step3BackBtn").addEventListener("click", () => showWizardStep(2));
 
+// 第二步 ASR：识别第一步暂存的音频
 async function runAsr(file, statusId, targetId) {
   if (!file) return;
   const fd = new FormData();
@@ -637,8 +725,48 @@ async function runAsr(file, statusId, targetId) {
   } catch (e) { setStatus(statusId, "识别失败: " + e.message, "err"); }
 }
 setupDropzone("asrDrop", "asrFile", (file) => runAsr(file, "asrStatus", "ttsText"));
-$("newAsrBtn").addEventListener("click", () => $("newAsrFile").click());
-$("newAsrFile").addEventListener("change", (e) => { if (e.target.files[0]) runAsr(e.target.files[0], "newAsrStatus", "newRefText"); });
+$("newAsrBtn").addEventListener("click", () => {
+  if (!stagedAudio) { setStatus("newAsrStatus", "请先在第 1 步选择音频", "err"); return; }
+  runAsr(stagedAudio.file, "newAsrStatus", "newRefText");
+});
+
+$("step2NextBtn").addEventListener("click", () => {
+  const name = $("newName").value.trim();
+  if (!name) { setStatus("infoStatus", "请先填写音色名称", "err"); return; }
+  if (!stagedAudio) { setStatus("infoStatus", "音频未就绪，请返回第 1 步重新选择", "err"); return; }
+  setStatus("infoStatus", "");
+  $("confirmSummary").innerHTML = [
+    "<b>名称</b>：" + escapeHtml(name),
+    "<b>音频文件</b>：" + escapeHtml(stagedAudio.label || "-"),
+    "<b>参考文本</b>：" + escapeHtml($("newRefText").value || "（空，极速克隆模式）"),
+    "<b>状态</b>：" + ($("newEnabled").checked ? "启用" : "禁用"),
+  ].join("<br>");
+  setStatus("addStatus", "");
+  showWizardStep(3);
+});
+
+$("confirmAddBtn").addEventListener("click", async () => {
+  if (!stagedAudio) { setStatus("addStatus", "音频未就绪，请返回第 1 步", "err"); return; }
+  const btn = $("confirmAddBtn");
+  btn.disabled = true;
+  setStatus("addStatus", "提交中…");
+  try {
+    const fd = new FormData();
+    fd.append("name", $("newName").value.trim());
+    fd.append("prompt_text", $("newRefText").value);
+    fd.append("enabled", $("newEnabled").checked ? "true" : "false");
+    fd.append("file", stagedAudio.file, stagedAudio.file.name);
+    const result = await (await api("/api/voices/upload", { method: "POST", body: fd })).json();
+    setStatus("addStatus", "新增成功: " + result.name, "ok");
+    // 重置向导，回到第 1 步；列表刷新后新音色置顶
+    clearStagedAudio();
+    $("newName").value = ""; $("newRefText").value = ""; $("newUrl").value = "";
+    $("newEnabled").checked = true;
+    showWizardStep(1);
+    await loadAll();
+  } catch (e) { setStatus("addStatus", "失败: " + e.message, "err"); }
+  finally { btn.disabled = false; }
+});
 
 function collectGenParams() {
   const params = {};

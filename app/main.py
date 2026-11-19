@@ -603,6 +603,52 @@ async def api_voice_audio(name: str) -> FileResponse:
     return FileResponse(path)
 
 
+@app.post("/api/audio/fetch")
+async def api_fetch_audio(payload: dict) -> Response:
+    """服务端下载远端音频并返回字节，供新增音色第一步试听/画波形（不落库）。
+
+    前端直接 fetch 外链会受 CORS 限制，故由服务端代取。
+    """
+    from urllib.parse import urlparse
+
+    url = str(payload.get("url", "")).strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="缺少 url")
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise HTTPException(status_code=400, detail="url 必须是 http/https 地址")
+    suffix = Path(parsed.path).suffix.lower()
+    if suffix not in AUDIO_SUFFIXES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"链接不是支持的音频格式（{', '.join(sorted(AUDIO_SUFFIXES))}）",
+        )
+    media_types = {
+        ".wav": "audio/wav", ".mp3": "audio/mpeg", ".flac": "audio/flac",
+        ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".aac": "audio/aac",
+        ".opus": "audio/ogg",
+    }
+    buf = bytearray()
+    try:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            async with client.stream("GET", url) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_bytes(1024 * 1024):
+                    buf.extend(chunk)
+                    if len(buf) > MAX_UPLOAD_BYTES:
+                        raise HTTPException(status_code=400, detail="音频超过 50MB")
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=400, detail=f"下载失败: {exc}")
+    if not buf:
+        raise HTTPException(status_code=400, detail="下载到的音频为空")
+    filename = Path(parsed.path).name or f"voice{suffix}"
+    return Response(
+        content=bytes(buf),
+        media_type=media_types.get(suffix, "application/octet-stream"),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.post("/api/asr")
 async def api_asr(
     file: UploadFile = File(...),

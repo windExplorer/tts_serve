@@ -61,10 +61,14 @@ class VoicesStore:
         voices = self.load()
         if name in voices:
             raise ValueError(f"音色已存在: {name}")
-        voices[name] = {
-            "prompt_wav": wav_filename,
-            "prompt_text": prompt_text,
-            "enabled": enabled,
+        # 新音色置顶：dict 保持插入顺序，前端列表按此顺序渲染
+        voices = {
+            name: {
+                "prompt_wav": wav_filename,
+                "prompt_text": prompt_text,
+                "enabled": enabled,
+            },
+            **voices,
         }
         self.save(voices)
 
