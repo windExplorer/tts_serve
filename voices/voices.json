@@ -225,7 +225,7 @@
     "prompt_wav": "哥伦比娅.wav",
     "prompt_text": "時々月に帰って、目を開けてテイワットを静かに見つめてると、いつの間にか心が安らいでる。",
     "enabled": true,
-    "language": "zh"
+    "language": "ja"
   },
   "哥伦比娅2.mp3": {
     "prompt_wav": "哥伦比娅2.mp3",
@@ -255,7 +255,7 @@
     "prompt_wav": "千早爱音.mp3",
     "prompt_text": "みなさん、こんにちは！今日のライブに来てくださって、本当にありがとうございます！皆さんの応援のおかげで、私たちの夢がまた一歩前に進みました。これからも精一杯頑張りますので、応援よろしくお願いします！",
     "enabled": true,
-    "language": "zh"
+    "language": "ja"
   },
   "ad学姐.wav": {
     "prompt_wav": "ad学姐.wav",
