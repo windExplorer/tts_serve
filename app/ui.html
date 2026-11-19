@@ -71,6 +71,25 @@
   .wizard-pane.active { display: block; }
   .wizard-actions { display: flex; gap: 10px; margin-top: 18px; justify-content: flex-end; }
   .wizard-actions button { min-width: 96px; }
+  .task-current { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; background: #fafbfc; }
+  .task-current.busy { border-color: #bfdbfe; background: #f5f9ff; }
+  .task-bar { height: 8px; border-radius: 4px; background: #e5e7eb; overflow: hidden; margin: 10px 0 6px; }
+  .task-bar > i { display: block; height: 100%; background: #2563eb; transition: width .3s; }
+  .task-current.failed .task-bar > i { background: #dc2626; }
+  .task-current.done .task-bar > i { background: #059669; }
+  .task-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
+  .task-stage { font-weight: 600; }
+  .task-stage.queued { color: #6b7280; }
+  .task-stage.loading { color: #d97706; }
+  .task-stage.synthesizing { color: #2563eb; }
+  .task-stage.done { color: #059669; }
+  .task-stage.failed { color: #dc2626; }
+  .task-meta { font-size: 12px; color: #6b7280; line-height: 1.7; word-break: break-all; }
+  .task-history { margin-top: 12px; max-height: 260px; overflow-y: auto; }
+  .task-row { display: flex; gap: 8px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid #f3f4f6; font-size: 12px; }
+  .task-row .id { color: #9ca3af; flex: 0 0 auto; }
+  .task-row .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; }
+  .task-row .dur { flex: 0 0 auto; color: #6b7280; }
   .history-item { padding: 8px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
   .history-item .t { color: #6b7280; font-size: 12px; }
   .hidden { display: none !important; }
@@ -172,6 +191,16 @@
           <a id="download" class="ghost small" style="text-align:center;text-decoration:none;padding:9px 18px;border:1px solid #d1d5db;border-radius:6px;color:#374151" download="tts_result.wav">下载 WAV</a>
         </div>
         <div class="stats" id="debugStats" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <h2>任务进度</h2>
+          <span class="status" id="taskPollStatus" style="font-size:12px"></span>
+        </div>
+        <div class="task-current" id="taskCurrent"><div class="task-meta">暂无任务</div></div>
+        <div class="wave-label" style="margin-top:14px">最近任务（服务端）</div>
+        <div class="task-history" id="taskHistory"></div>
       </div>
 
       <div class="card">
@@ -486,6 +515,83 @@ async function loadAll() {
   }
 }
 $("voiceLangFilter").addEventListener("change", renderVoiceTable);
+
+// ── 任务进度面板（轮询 /api/tasks） ──
+const TASK_STAGE_LABEL = {
+  queued: "排队中", loading: "加载模型", synthesizing: "合成中",
+  done: "已完成", failed: "失败",
+};
+const TASK_STAGE_PCT = { queued: 8, loading: 30, synthesizing: 80, done: 100, failed: 100 };
+let tasksPolling = false;
+
+function renderTaskPanel(snap) {
+  const cur = snap.current;
+  const box = $("taskCurrent");
+  if (!cur) {
+    box.className = "task-current";
+    box.innerHTML = '<div class="task-meta">暂无任务</div>';
+  } else {
+    const active = !["done", "failed"].includes(cur.stage);
+    box.className = "task-current" + (active ? " busy" : " " + cur.stage);
+    const label = TASK_STAGE_LABEL[cur.stage] || cur.stage;
+    let pct = TASK_STAGE_PCT[cur.stage] || 0;
+    // 合成阶段在 80% 基础上按已用时做轻微推进，仅作示意（底层无真实百分比）
+    if (cur.stage === "synthesizing" && cur.elapsed) {
+      pct = Math.min(95, 80 + Math.floor(cur.elapsed / 3));
+    }
+    const meta = [
+      "任务 " + escapeHtml(cur.id) + " · " + escapeHtml(cur.backend),
+      "音色：" + escapeHtml(cur.voice) + (cur.language ? " · 语种：" + escapeHtml(cur.language) : ""),
+      "文本：" + escapeHtml(cur.text),
+      "已用 " + Number(cur.elapsed || 0).toFixed(1) + "s" +
+        (cur.queued_sec ? " · 排队 " + Number(cur.queued_sec).toFixed(1) + "s" : "") +
+        (cur.duration ? " · 音频 " + Number(cur.duration).toFixed(1) + "s" : ""),
+    ];
+    if (cur.error) meta.push('<span style="color:#dc2626">错误：' + escapeHtml(cur.error) + "</span>");
+    box.innerHTML =
+      '<div class="task-head"><span class="task-stage ' + cur.stage + '">' + label + "</span>" +
+      "<span>" + pct + "%</span></div>" +
+      '<div class="task-bar"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="task-meta">' + meta.join("<br>") + "</div>";
+  }
+
+  const hist = $("taskHistory");
+  if (!snap.history.length) {
+    hist.innerHTML = '<div class="task-meta">暂无历史</div>';
+    return;
+  }
+  hist.innerHTML = snap.history.map((t) => {
+    const label = TASK_STAGE_LABEL[t.stage] || t.stage;
+    const cls = t.stage === "done" ? "done" : "failed";
+    return '<div class="task-row">' +
+      '<span class="id">' + escapeHtml(t.id) + '</span>' +
+      '<span class="txt" title="' + escapeAttr(t.text) + '">' + escapeHtml(t.text) + "</span>" +
+      '<span class="dur">' + Number(t.elapsed || 0).toFixed(1) + "s</span>" +
+      '<span class="task-stage ' + cls + '">' + label + "</span>" +
+      "</div>";
+  }).join("");
+}
+
+async function pollTasks() {
+  if (tasksPolling) return;
+  tasksPolling = true;
+  try {
+    const snap = await (await api("/api/tasks")).json();
+    renderTaskPanel(snap);
+    setStatus("taskPollStatus", "", "");
+  } catch (e) {
+    setStatus("taskPollStatus", "任务状态不可用", "err");
+  } finally {
+    tasksPolling = false;
+  }
+}
+
+// 仅在语音合成面板可见时轮询，减少无效请求
+setInterval(() => {
+  const panel = $("panel-synth");
+  if (panel && panel.classList.contains("active")) pollTasks();
+}, 2000);
+pollTasks();
 
 function renderStats() {
   $("serverStats").innerHTML = [
@@ -937,7 +1043,7 @@ $("genBtn").addEventListener("click", async () => {
     setStatus("genStatus", "生成完成（" + backendLabel + "）", "ok");
     addHistory({ text: $("ttsText").value, voice: $("voiceSelect").value, backend: backendLabel, time: new Date().toLocaleString(), elapsed: serverTime.toFixed(2), duration: duration.toFixed(2) });
   } catch (e) { setStatus("genStatus", "失败: " + e.message, "err"); }
-  finally { btn.disabled = false; }
+  finally { btn.disabled = false; pollTasks(); }
 });
 
 $("clearResult").addEventListener("click", () => {

@@ -19,6 +19,7 @@ from .asr import ASREngine
 from .config import Settings, load_settings
 from . import runtime_config
 from .schema import HealthResponse
+from .tasks import TaskTracker
 from .voices_store import AUDIO_SUFFIXES, VoicesStore
 from backends.base import BaseBackend
 from backends.cosyvoice3 import CosyVoice3Backend
@@ -257,6 +258,7 @@ async def lifespan(app: FastAPI):
     app.state.backend = backend
     app.state.asr = ASREngine()
     app.state.sample_rate = backend.sample_rate()
+    app.state.tasks = TaskTracker()
     app.state.lock = asyncio.Lock()
     _vram_state["device_lock"] = asyncio.Lock()
     _vram_state["last_infer_end"] = time.time()
@@ -324,8 +326,17 @@ async def inference_zero_shot(
 ) -> Response:
     if not tts_text.strip():
         raise HTTPException(status_code=400, detail="tts_text 不能为空")
+
+    tracker = app.state.tasks
+    task = tracker.start(
+        tts_text,
+        prompt_wav_path or "",
+        app.state.backend.name,
+        fast_clone.strip().lower() not in {"false", "0", "no"},
+    )
     selected = app.state.voices.get(prompt_wav_path)
     if isinstance(selected, dict) and selected.get("enabled") is False:
+        tracker.finish(task, False, error="该音色已禁用")
         raise HTTPException(status_code=400, detail="该音色已禁用")
     # 音色自带语种时优先用音色语种，否则回退到全局 LANGUAGE 设置
     language = (
@@ -379,10 +390,12 @@ async def inference_zero_shot(
             )
 
         # 推理前确保权重在 GPU（显存不足时按需搬运，必要时 CPU 回退）
+        tracker.set_stage(task, "loading", language=language)
         if not await ensure_loaded(app):
             raise HTTPException(status_code=503, detail="显存不足且已禁用 CPU 回退，请稍后重试")
 
         started = time.perf_counter()
+        tracker.set_stage(task, "synthesizing")
         async with app.state.lock:
             try:
                 pcm, sr = await asyncio.wait_for(
@@ -404,6 +417,8 @@ async def inference_zero_shot(
                 )
         elapsed = time.perf_counter() - started
         _vram_state["last_infer_end"] = time.time()
+        duration = len(pcm) / 2 / sr if pcm and sr else None
+        tracker.finish(task, True, duration=duration, sample_rate=sr, language=language)
 
         if sr != app.state.sample_rate:
             logger.warning(
@@ -419,6 +434,12 @@ async def inference_zero_shot(
                 "X-Sample-Rate": str(sr),
             },
         )
+    except HTTPException as exc:
+        tracker.finish(task, False, error=str(exc.detail))
+        raise
+    except Exception as exc:
+        tracker.finish(task, False, error=str(exc))
+        raise
     finally:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
@@ -453,6 +474,12 @@ async def api_status() -> dict:
         "voices_enabled": len(enabled_voices(app.state.voices)),
         "asr_loaded": app.state.asr._model is not None,
     }
+
+
+@app.get("/api/tasks")
+async def api_tasks() -> dict:
+    """当前合成任务阶段与最近历史，供 WebUI 任务面板轮询。"""
+    return app.state.tasks.snapshot()
 
 
 @app.post("/api/vram/unload")
