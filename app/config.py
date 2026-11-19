@@ -47,7 +47,7 @@ class Settings:
     cosy_worker_port: int = field(
         default_factory=lambda: int(_env("COSY_WORKER_PORT", "51002"))
     )
-    language: str = field(default_factory=lambda: _env("LANGUAGE", "Chinese"))
+    language: str = field(default_factory=lambda: _env("LANGUAGE", "zh"))
     voices_dir: Path = field(
         default_factory=lambda: _resolve(_env("VOICES_DIR", "voices"))
     )

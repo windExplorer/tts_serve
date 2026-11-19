@@ -532,7 +532,7 @@ async def api_upload_voice(
     name: str = Form(...),
     prompt_text: str = Form(""),
     enabled: str = Form("true"),
-    language: str = Form("Chinese"),
+    language: str = Form("zh"),
     file: UploadFile = File(...),
 ) -> dict:
     suffix = Path(file.filename or "").suffix.lower()
@@ -566,7 +566,7 @@ async def api_add_voice_from_url(
     url: str = Form(...),
     prompt_text: str = Form(""),
     enabled: str = Form("true"),
-    language: str = Form("Chinese"),
+    language: str = Form("zh"),
 ) -> dict:
     from urllib.parse import urlparse
 

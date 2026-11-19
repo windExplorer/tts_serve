@@ -29,12 +29,12 @@ class VoicesStore:
             if isinstance(value, str):
                 result[key] = {
                     "prompt_wav": key, "prompt_text": value,
-                    "enabled": True, "language": "Chinese",
+                    "enabled": True, "language": "zh",
                 }
             elif isinstance(value, dict):
                 item = dict(value)
                 item.setdefault("enabled", True)
-                item.setdefault("language", "Chinese")
+                item.setdefault("language", "zh")
                 result[key] = item
         return result
 
@@ -63,7 +63,7 @@ class VoicesStore:
 
     def add(
         self, name: str, wav_filename: str, prompt_text: str = "",
-        enabled: bool = True, language: str = "Chinese",
+        enabled: bool = True, language: str = "zh",
     ) -> None:
         voices = self.load()
         if name in voices:
@@ -74,7 +74,7 @@ class VoicesStore:
                 "prompt_wav": wav_filename,
                 "prompt_text": prompt_text,
                 "enabled": enabled,
-                "language": language or "Chinese",
+                "language": language or "zh",
             },
             **voices,
         }

@@ -343,17 +343,16 @@ let listAudioUrl = null;
 
 // 音色语种选项（值与后端 language 字段一致）；新增/编辑/筛选共用
 const VOICE_LANGUAGES = [
-  ["Chinese", "中文"], ["English", "英文"], ["Japanese", "日文"],
-  ["Korean", "韩文"], ["Cantonese", "粤语"], ["French", "法文"],
-  ["German", "德文"], ["Spanish", "西班牙文"], ["Portuguese", "葡萄牙文"],
-  ["Russian", "俄文"],
+  ["zh", "中文"], ["ja", "日文"], ["ko", "韩文"],
+  ["en", "英文"], ["ru", "俄文"], ["th", "泰文"],
+  ["ar", "阿拉伯文"], ["hi", "印地文"], ["el", "希腊文"],
 ];
 function langOptions(selected) {
   return VOICE_LANGUAGES.map(([v, label]) =>
     '<option value="' + v + '"' + (v === selected ? " selected" : "") + '>' + label + "</option>"
   ).join("");
 }
-function fillLangSelect(id, selected) { $(id).innerHTML = langOptions(selected || "Chinese"); }
+function fillLangSelect(id, selected) { $(id).innerHTML = langOptions(selected || "zh"); }
 
 function currentBackend() { return state.status.backend || "unknown"; }
 function backendLabel(name) { return name === "qwen3" ? "Qwen3-TTS-0.6B" : name === "cosyvoice3" ? "Fun-CosyVoice3-0.5B" : name; }
@@ -695,7 +694,7 @@ function renderLangFilter() {
   const sel = $("voiceLangFilter");
   const previous = sel.value || "ALL";
   // 只列出实际用到的语种，固定“全部”置顶
-  const used = new Set(Object.values(state.voices).map((v) => v.language || "Chinese"));
+  const used = new Set(Object.values(state.voices).map((v) => v.language || "zh"));
   let html = '<option value="ALL">全部语种</option>';
   VOICE_LANGUAGES.forEach(([v, label]) => {
     if (used.has(v)) html += '<option value="' + v + '">' + label + "</option>";
@@ -715,7 +714,7 @@ function renderVoiceTable() {
   tbody.innerHTML = "";
   const filter = $("voiceLangFilter").value;
   Object.entries(state.voices).forEach(([name, info]) => {
-    const lang = info.language || "Chinese";
+    const lang = info.language || "zh";
     if (filter !== "ALL" && lang !== filter) return;
     const tr = document.createElement("tr");
     const enabled = info.enabled !== false;
@@ -777,7 +776,7 @@ async function voiceAction(action, name) {
     $("editName").value = name;
     $("editName").dataset.original = name;
     $("editRefText").value = state.voices[name].prompt_text || "";
-    fillLangSelect("editLang", state.voices[name].language || "Chinese");
+    fillLangSelect("editLang", state.voices[name].language || "zh");
     $("editStatus").textContent = "";
     $("editModal").classList.remove("hidden");
   }
@@ -944,7 +943,7 @@ $("confirmAddBtn").addEventListener("click", async () => {
     // 重置向导，回到第 1 步；列表刷新后新音色置顶
     clearStagedAudio();
     $("newName").value = ""; $("newRefText").value = ""; $("newUrl").value = "";
-    $("newEnabled").checked = true; fillLangSelect("newLang", "Chinese");
+    $("newEnabled").checked = true; fillLangSelect("newLang", "zh");
     showWizardStep(1);
     await loadAll();
   } catch (e) { setStatus("addStatus", "失败: " + e.message, "err"); }
@@ -1058,8 +1057,8 @@ $("clearResult").addEventListener("click", () => {
   $("debugStats").innerHTML = "";
 });
 
-fillLangSelect("newLang", "Chinese");
-fillLangSelect("editLang", "Chinese");
+fillLangSelect("newLang", "zh");
+fillLangSelect("editLang", "zh");
 loadAll();
 loadHistory();
 loadApiConfig();

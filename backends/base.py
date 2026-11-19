@@ -9,6 +9,37 @@ import numpy as np
 
 END_OF_PROMPT = "<|endofprompt|>"
 
+# 界面/配置使用的短语种代码 -> 模型接受的语言名。
+# 模型只认全称小写（见其 config 的 codec_language_id），短代码直接传入会报错。
+LANGUAGE_CODE_MAP = {
+    "zh": "chinese",
+    "ja": "japanese",
+    "ko": "korean",
+    "en": "english",
+    "ru": "russian",
+    # 以下模型不支持，回退 auto 由模型按文本自动判断
+    "th": "auto",
+    "ar": "auto",
+    "hi": "auto",
+    "el": "auto",
+}
+# 模型原生接受的语言名（含旧数据里可能出现的大写形式，统一 lower 后比较）
+_MODEL_LANGUAGES = {
+    "auto", "chinese", "english", "japanese", "korean", "russian",
+    "french", "german", "italian", "portuguese", "spanish",
+}
+
+
+def normalize_language(lang: str | None) -> str:
+    """把短语种代码（zh/ja/...）转成模型接受的语言名；无法识别时回退 auto。"""
+    if not lang:
+        return "auto"
+    key = str(lang).strip().lower()
+    if key in _MODEL_LANGUAGES:
+        return key
+    return LANGUAGE_CODE_MAP.get(key, "auto")
+
+
 # 中文 TTS 前端会把这些语气符号当未知字符丢掉，需先换成它认识的停顿标点
 _PAUSE_SYMBOLS_RE = re.compile(r"[~～…]+")
 _REPEATED_PERIOD_RE = re.compile(r"。{2,}")

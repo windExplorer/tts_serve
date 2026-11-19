@@ -4,7 +4,10 @@ import gc
 import logging
 from pathlib import Path
 
-from .base import BaseBackend, float_to_pcm16, normalize_tts_text, strip_cosyvoice_prompt
+from .base import (
+    BaseBackend, float_to_pcm16, normalize_language, normalize_tts_text,
+    strip_cosyvoice_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +105,7 @@ class Qwen3Backend(BaseBackend):
         # x_vector_only_mode=True：只用说话人 embedding（极速克隆），忽略参考文本
         wavs, sr = self._model.generate_voice_clone(
             text=tts_text,
-            language=language,
+            language=normalize_language(language),
             ref_audio=ref_audio,
             ref_text=None if fast_clone else ref_text,
             x_vector_only_mode=fast_clone,
