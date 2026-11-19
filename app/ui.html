@@ -298,6 +298,9 @@ let audioCtx = null;
 let refSamples = null;
 // 新增音色向导第一步暂存的音频 { file, url }; url 为 createObjectURL 生成，切换时回收
 let stagedAudio = null;
+// 音色列表试听用的共享 audio 元素
+let listAudio = null;
+let listAudioUrl = null;
 
 function currentBackend() { return state.status.backend || "unknown"; }
 function backendLabel(name) { return name === "qwen3" ? "Qwen3-TTS-0.6B" : name === "cosyvoice3" ? "Fun-CosyVoice3-0.5B" : name; }
@@ -568,6 +571,7 @@ function renderVoiceTable() {
       "<td>" + escapeHtml((info.prompt_text || "").slice(0, 40)) + "</td>" +
       "<td><span class='badge " + (enabled ? "on" : "off") + "'>" + (enabled ? "启用" : "禁用") + "</span></td>" +
       "<td>" +
+        "<button class='ghost small' data-act='play' data-name='" + escapeAttr(name) + "'>试听</button> " +
         "<button class='ghost small' data-act='toggle' data-name='" + escapeAttr(name) + "'>" + (enabled ? "禁用" : "启用") + "</button> " +
         "<button class='ghost small' data-act='edit' data-name='" + escapeAttr(name) + "'>编辑</button> " +
         "<button class='danger small' data-act='delete' data-name='" + escapeAttr(name) + "'>删除</button>" +
@@ -581,7 +585,18 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp
 function escapeAttr(s) { return escapeHtml(s); }
 
 async function voiceAction(action, name) {
-  if (action === "toggle") {
+  if (action === "play") {
+    try {
+      const resp = await api("/api/voices/" + encodeURIComponent(name) + "/audio");
+      const blob = await resp.blob();
+      if (listAudioUrl) URL.revokeObjectURL(listAudioUrl);
+      listAudioUrl = URL.createObjectURL(blob);
+      if (!listAudio) listAudio = new Audio();
+      listAudio.src = listAudioUrl;
+      listAudio.currentTime = 0;
+      await listAudio.play();
+    } catch (e) { alert("试听失败: " + e.message); }
+  } else if (action === "toggle") {
     const current = state.voices[name].enabled !== false;
     try {
       await api("/api/voices/" + encodeURIComponent(name), {
