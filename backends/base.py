@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import gc
+import re
 from abc import ABC, abstractmethod
 
 import numpy as np
 
 
 END_OF_PROMPT = "<|endofprompt|>"
+
+# 中文 TTS 前端会把这些语气符号当未知字符丢掉，需先换成它认识的停顿标点
+_PAUSE_SYMBOLS_RE = re.compile(r"[~～…]+")
+_REPEATED_PERIOD_RE = re.compile(r"。{2,}")
+_PERIOD_THEN_WEAK_PUNCT_RE = re.compile(r"。[，、]")
 
 
 def strip_cosyvoice_prompt(text: str) -> str:
@@ -21,6 +27,20 @@ def strip_cosyvoice_prompt(text: str) -> str:
     if END_OF_PROMPT in text:
         # 取最后一个分隔符之后的内容（正文中若真出现该 token，以最后的为准）
         return text.rsplit(END_OF_PROMPT, 1)[1].strip()
+    return text
+
+
+def normalize_tts_text(text: str) -> str:
+    """把会被 TTS 前端丢弃的语气符号转成句号停顿。
+
+    - `~` / `～`（波浪号）、`…` / `……`（省略号）-> `。`
+    - 合并转换后相邻的句号，以及句号后紧跟的逗号/顿号，避免出现 `。。` / `。，`
+    """
+    if not text:
+        return text
+    text = _PAUSE_SYMBOLS_RE.sub("。", text)
+    text = _REPEATED_PERIOD_RE.sub("。", text)
+    text = _PERIOD_THEN_WEAK_PUNCT_RE.sub("。", text)
     return text
 
 

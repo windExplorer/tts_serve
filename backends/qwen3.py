@@ -4,7 +4,7 @@ import gc
 import logging
 from pathlib import Path
 
-from .base import BaseBackend, float_to_pcm16, strip_cosyvoice_prompt
+from .base import BaseBackend, float_to_pcm16, normalize_tts_text, strip_cosyvoice_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +95,7 @@ class Qwen3Backend(BaseBackend):
         # 剥掉 CosyVoice 副文本指令（<|endofprompt|> 前的语气/方言部分），
         # Qwen3 tokenizer 不认识该 token，否则会整段念出来
         tts_text = strip_cosyvoice_prompt(tts_text)
+        tts_text = normalize_tts_text(tts_text)
         if not tts_text.strip():
             tts_text = "。"  # 清洗后为空的兜底，避免模型报错
         ref_text = strip_cosyvoice_prompt(ref_text) if ref_text else ref_text

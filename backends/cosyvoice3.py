@@ -5,7 +5,7 @@ import logging
 import sys
 from pathlib import Path
 
-from .base import BaseBackend, float_to_pcm16
+from .base import BaseBackend, float_to_pcm16, normalize_tts_text
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +92,10 @@ class CosyVoice3Backend(BaseBackend):
             raise RuntimeError("CosyVoice3 后端未加载")
 
         import numpy as np
+
+        tts_text = normalize_tts_text(tts_text)
+        if not tts_text.strip():
+            tts_text = "。"  # 清洗后为空的兜底，避免模型报错
 
         chunks = []
         # 极速克隆用 cross_lingual：内部只保留说话人 embedding，去掉 prompt_text
